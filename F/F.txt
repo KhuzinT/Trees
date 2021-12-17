@@ -1,0 +1,295 @@
+//
+//I didn't use smart pointers, since TL happens to them
+//
+
+#include <iostream>
+#include <vector>
+#include <memory>
+
+//*********************************************************************************
+
+template <typename T>
+
+T kZero = 0;
+
+//*********************************************************************************
+
+template <typename T>
+class Treap {
+private:
+    //*********************************************************************************
+
+    struct Node;
+
+    typedef std::shared_ptr<Node> shared_ptr;
+
+    struct Node {
+        std::shared_ptr<Node> left = nullptr;
+        std::shared_ptr<Node> right = nullptr;
+
+        T key = kZero<T>;
+        T priority = kZero<T>;
+        T result = kZero<T>;
+
+        Node(const T& k, const T& p) {
+            key = k;
+            priority = p;
+            result = k;
+        }
+    };
+
+    shared_ptr root_ = nullptr;
+
+    //*********************************************************************************
+
+    void UpdateNode(shared_ptr root) {
+        if (root == nullptr) {
+            return;
+        }
+        shared_ptr left = root->left;
+        shared_ptr right = root->right;
+
+        if (left == nullptr && right == nullptr) {
+            root->result = root->key;
+            return;
+        }
+        if (left == nullptr) {
+            root->result = root->key + right->result;
+            return;
+        }
+        if (right == nullptr) {
+            root->result = root->key + left->result;
+            return;
+        }
+
+        root->result = root->key + left->result + right->result;
+    }
+
+    void Split(const T& key, shared_ptr &root, shared_ptr &Left, shared_ptr &Right) {
+        if (root == nullptr) {
+            return;
+        }
+        shared_ptr object = nullptr;
+
+        if (key <= root->key) {
+            if (root->left) {
+                Split(key, root->left, Left, object);
+            } else {
+                Left = nullptr;
+            }
+
+            /*if (Right) {
+                delete Right;
+                Right = nullptr;
+            }
+            Right = new Node(root->key, root->priority);*/
+            auto Right = std::make_shared<Node>(root->key, root->priority);
+
+            Right->left = object;
+            Right->right = root->right;
+        }
+
+        if (key > root->key) {
+            if (root->right) {
+                Split(key, root->right, object, Right);
+            } else {
+                Right = nullptr;
+            }
+
+            /*if (Left) {
+                delete Left;
+                Left = nullptr;
+            }
+            Left = new Node(root->key, root->priority);*/
+            auto Left = std::make_shared<Node>(root->key, root->priority);
+
+            Left->left = root->left;
+            Left->right = object;
+        }
+
+        UpdateNode(root);
+        UpdateNode(Left);
+        UpdateNode(Right);
+    }
+
+    shared_ptr Merge(shared_ptr Left, shared_ptr Right) {
+        if (Left == nullptr) {
+            return Right;
+        }
+        if (Right == nullptr) {
+            return Left;
+        }
+
+        if (Left->priority < Right->priority) {
+            shared_ptr object = Merge(Left, Right->left);
+            //shared_ptr answer = new Node(Right->key, Right->priority);
+            auto answer = std::make_shared<Node>(Right->key, Right->priority);
+
+            answer->left = object;
+            answer->right = Right->right;
+
+            UpdateNode(answer);
+
+            return answer;
+        }
+
+        if (Left->priority > Right->priority) {
+            shared_ptr object = Merge(Left->right, Right);
+            //shared_ptr answer = new Node(Left->key, Left->priority);
+            auto answer = std::make_shared<Node>(Left->key, Left->priority);
+
+            answer->left = Left->left;
+            answer->right = object;
+
+            UpdateNode(answer);
+
+            return answer;
+        }
+
+        std::cout << "¯\\_(ツ)_/¯" << std::endl;
+        return nullptr;
+    }
+
+    shared_ptr Find(const T& key, shared_ptr root) {
+        if (root == nullptr) {
+            return root;
+        }
+        if (root->key == key) {
+            return root;
+        }
+
+        if (key < root->key) {
+            return Find(key, root->left);
+        } else {
+            return Find(key, root->right);
+        }
+    }
+
+    shared_ptr Insert(const T& key, const T& priority, shared_ptr root) {
+        shared_ptr in = Find(key, root);
+        if (in) {
+            //in->priority = priority;
+            return root;
+        }
+
+        shared_ptr left = nullptr;
+        shared_ptr right = nullptr;
+
+        Split(key, root, left, right);
+        //shared_ptr object = new Node(key, priority);
+        auto object = std::make_shared<Node>(key, priority);
+
+        return Merge(Merge(left, object), right);
+    }
+
+    T Get(shared_ptr root, const size_t& left, const size_t& right) {
+
+        shared_ptr LLeft = nullptr;
+        shared_ptr LRight = nullptr;
+        Split(left, root, LLeft, LRight);
+
+        shared_ptr RLeft = nullptr;
+        shared_ptr RRight = nullptr;
+        Split(right, LRight, RLeft, RRight);
+
+        T answer = kZero<T>;
+        if (RLeft != nullptr) {
+            answer = RLeft->result;
+        }
+
+        LRight = Merge(RLeft, RRight);
+        root = Merge(LLeft, LRight);
+
+        return answer;
+    }
+
+    /*void Free(shared_ptr root) {
+        if (root == nullptr) {
+            return;
+        }
+        if (root->left == nullptr && root->right == nullptr) {
+            delete root;
+            return;
+        }
+        Free(root->left);
+        Free(root->right);
+
+        delete root;
+    }*/
+
+    //*********************************************************************************
+public:
+    void Add(const T& key, const T& priority) {
+        root_ = Insert(key, priority, root_);
+    }
+
+    T GetSum(const size_t& left, const size_t& right) {
+        return Get(root_, left, right + 1);
+    }
+    /*
+    ~Treap() {
+        Free(root_);
+    }*/
+
+    //*********************************************************************************
+};
+
+//*********************************************************************************
+
+int main() {
+    //*********************************************************************************
+
+    srand(time(nullptr));
+
+    uint64_t quantity = 0;
+    std::cin >> quantity;
+
+    bool is_previous = false;
+    int64_t previous = 0;
+
+    Treap<int64_t> tree;
+
+    //*********************************************************************************
+
+    std::vector<int64_t> answer;
+    for (uint64_t i = 0; i < quantity; ++i) {
+        char symbol;
+        std::cin >> symbol;
+
+        if (symbol == '+') {
+            int64_t key = 0;
+            std::cin >> key;
+
+            const int64_t module = 1000 * 1000 * 1000 * 1LL;
+            if (is_previous) {
+                tree.Add((key + previous) % module, rand() % module);
+                is_previous = false;
+            } else {
+                tree.Add(key, rand() % module);
+            }
+            continue;
+        }
+
+        if (symbol == '?') {
+            uint64_t left = 0, right = 0;
+            std::cin >> left >> right;
+
+            previous = tree.GetSum(left, right);
+            answer.push_back(previous);
+            is_previous = true;
+            continue;
+        }
+    }
+
+    //*********************************************************************************
+
+    for (auto& element : answer) {
+        std::cout << element << std::endl;
+    }
+
+    return 0;
+
+    //*********************************************************************************
+}
+
+//*********************************************************************************
